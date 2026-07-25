@@ -58,6 +58,9 @@ final class AppState: ObservableObject {
     @Published var modelSettings: [String: ModelSettings] = {
         Dictionary(uniqueKeysWithValues: AppState.knownModels.map { ($0.id, ModelSettings.optimal) })
     }()
+    @Published var fullModelSettings: [String: FullModelSettings] = {
+        Dictionary(uniqueKeysWithValues: AppState.knownModels.map { ($0.id, FullModelSettings.optimal) })
+    }()
 
     // Stats
     @Published var stats: AdminStats? = nil

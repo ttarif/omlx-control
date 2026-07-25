@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
-
+    @State private var advancedModel: ModelInfo? = nil
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -59,10 +59,32 @@ struct SettingsView: View {
                         .font(.system(size: 9)).foregroundStyle(.green)
                 }
                 Spacer()
+                Button {
+                    advancedModel = model
+                } label: {
+                    Label("Advanced", systemImage: "gearshape.2")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .controlSize(.small)
                 Button("Apply") { Task { await state.applySettings(for: model.id) } }
                     .buttonStyle(.bordered).controlSize(.small)
                     .disabled(!state.serverRunning)
             }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
+        .sheet(item: $advancedModel) { m in
+            AdvancedSettingsView(
+                model: m,
+                fullSettings: Binding(
+                    get: { state.fullModelSettings[m.id] ?? .optimal },
+                    set: { state.fullModelSettings[m.id] = $0 }
+                )
+            )
+            .environmentObject(state)
+            .frame(width: 400, height: 620)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
