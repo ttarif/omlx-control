@@ -6,11 +6,9 @@ func makeIcon(size: CGFloat) -> NSImage {
     img.lockFocus()
     let ctx = NSGraphicsContext.current!.cgContext
 
-    // Rounded-rect background with vertical gradient (indigo → teal)
-    let inset = size * 0.06
-    let rect = CGRect(x: inset, y: inset, width: size - inset*2, height: size - inset*2)
-    let radius = size * 0.22
-    let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+    // Circular background with vertical gradient (indigo → teal)
+    let rect = CGRect(x: size * 0.05, y: size * 0.05, width: size * 0.9, height: size * 0.9)
+    let path = CGPath(ellipseIn: rect, transform: nil)
     ctx.addPath(path)
     ctx.clip()
 
