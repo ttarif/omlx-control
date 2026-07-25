@@ -1,0 +1,13 @@
+# Swift build artifacts
+.build/
+*.o
+*.d
+
+# macOS
+.DS_Store
+*.swp
+*.xcuserstate
+
+# Sensitive
+.env
+*.key
