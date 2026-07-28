@@ -1,6 +1,0 @@
-Target dependency graph (3 targets)
-Target 'AllExcludingTests' in project 'Aggregate'
-➜ Explicit dependency on target 'oMLXControl-product' in project 'oMLXControl'
-➜ Explicit dependency on target 'oMLXControl' in project 'oMLXControl'
-Target 'oMLXControl' in project 'oMLXControl' (no dependencies)
-Target 'oMLXControl-product' in project 'oMLXControl' (no dependencies)

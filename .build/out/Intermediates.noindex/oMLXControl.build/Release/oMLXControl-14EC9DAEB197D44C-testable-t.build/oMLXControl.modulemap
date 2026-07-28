@@ -1,4 +1,0 @@
-module oMLXControl {
-header "oMLXControl-Swift.h"
-export *
-}
