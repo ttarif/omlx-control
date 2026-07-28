@@ -90,8 +90,8 @@ final class AppState: ObservableObject {
             displayName:   "Laguna S.2",
             role:          "Coding",
             quant:         "Q4_K_M + DFlash n=15",
-            contextLabel:  "256K",
-            contextTokens: 262_144,
+            contextLabel:  "128K",
+            contextTokens: 131_072,
             ppTPS:         840,
             tgTPS:         85,
             weightGB:      70.5
@@ -108,12 +108,10 @@ final class AppState: ObservableObject {
             ("512K YaRN", 524_288),
         ],
         "laguna-s21-q4km-dflash": [
-            ("8K",   8_192),
-            ("16K",  16_384),
-            ("32K",  32_768),
-            ("64K",  65_536),
-            ("128K", 131_072),
-            ("256K ★", 262_144),     // full native qualification
+            ("32K",        32_768),
+            ("64K",        65_536),
+            ("128K ★",    131_072),   // global 128K policy
+            ("256K",       262_144),
         ],
     ]
 
