@@ -1,6 +1,8 @@
 # oMLX Control
 
-> A native macOS menu bar control panel for local LLM inference via [oMLX](https://github.com/jundot/omlx). Manage models, monitor real-time GPU memory and throughput, and tune all 23 oMLX settings — without leaving the menu bar.
+> A native macOS menu bar control panel for **Tess server** local LLM inference. Switch between Tess profiles (Tess-4-35B-A3B and Laguna S.2), monitor real-time throughput from `/metrics`, configure context windows, and control the server — without leaving the menu bar.
+>
+> **Originally built for oMLX. Re-targeted to [tess-server](https://github.com/trinity-cloud/tess-server) v0.1.3+ with profile switching, Prometheus metrics parsing, and launchctl integration.**
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Swift](https://img.shields.io/badge/swift-5.9%2B-orange)

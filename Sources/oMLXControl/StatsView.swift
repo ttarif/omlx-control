@@ -20,7 +20,7 @@ struct StatsView: View {
     }
 
     // ── Memory pressure ──────────────────────────────────────────────
-    private func memorySection(_ s: AdminStats) -> some View {
+    private func memorySection(_ s: TessStats) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("GPU MEMORY").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
@@ -53,14 +53,14 @@ struct StatsView: View {
     }
 
     // ── Metrics grid ─────────────────────────────────────────────────
-    private func metricsGrid(_ s: AdminStats) -> some View {
+    private func metricsGrid(_ s: TessStats) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            card("Prefill", String(format: "%.0f", s.avgPrefillTPS), "t/s avg", "arrow.down.forward")
-            card("Decode", String(format: "%.0f", s.avgGenerationTPS), "t/s avg", "arrow.up.forward")
-            card("Requests", "\(s.totalRequests)", "total", "tray.full")
-            card("Active", "\(s.activeRequests)", "\(s.waitingRequests) waiting", "bolt.horizontal")
-            card("Tokens", fmt(s.totalTokensServed), "served", "number")
-            card("Cache", String(format: "%.0f%%", s.cacheEfficiency * 100), "hit rate", "externaldrive")
+            card("Prefill", String(format: "%.0f", s.avgPrefillTPS), "t/s",    "arrow.down.forward")
+            card("Decode",  String(format: "%.0f", s.avgGenerationTPS), "t/s", "arrow.up.forward")
+            card("Processing", "\(s.requestsProcessing)", "active",            "bolt.horizontal")
+            card("Queued",  "\(s.requestsDeferred)", "deferred",               "tray.full")
+            card("Tokens",  fmt(s.totalTokensServed), "served",                "number")
+            card("Profile", "tess", "active",                                  "cpu")
         }
     }
 

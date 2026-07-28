@@ -20,7 +20,7 @@ struct ModelsView: View {
     private var offlineHint: some View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle")
-            Text("Start the server to load and test models.")
+            Text("Start Tess server to load models.")
         }
         .font(.system(size: 10))
         .foregroundStyle(.secondary)
@@ -37,31 +37,29 @@ struct ModelCard: View {
             // Title row
             HStack(spacing: 8) {
                 Circle()
-                    .fill(model.isLoaded ? Color.green : Color.secondary.opacity(0.35))
+                    .fill(model.isActive ? Color.green : Color.secondary.opacity(0.35))
                     .frame(width: 9, height: 9)
-                    .overlay(
-                        Circle().stroke(model.isLoaded ? Color.green.opacity(0.35) : .clear, lineWidth: 3)
-                    )
+                    .overlay(Circle().stroke(model.isActive ? Color.green.opacity(0.35) : .clear, lineWidth: 3))
                 Text(model.displayName)
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 roleBadge
             }
 
-            // Meta row
+            // Meta chips
             HStack(spacing: 6) {
                 metaChip(model.quant)
                 metaChip(model.contextLabel)
                 metaChip(String(format: "%.0f GB", model.weightGB))
-                if let sz = model.sizeFormatted, model.isLoaded {
-                    metaChip("RAM \(sz)", tint: .green)
+                if model.isActive {
+                    metaChip("ACTIVE", tint: .green)
                 }
             }
 
             // Benchmark row
             HStack(spacing: 14) {
                 benchStat("Prefill", model.ppTPS, "t/s")
-                benchStat("Decode", model.tgTPS, "t/s")
+                benchStat("Decode",  model.tgTPS, "t/s")
                 if let t = model.lastTestTPS {
                     benchStat("Live", t, "t/s", tint: .blue)
                 }
@@ -70,24 +68,24 @@ struct ModelCard: View {
             // Actions
             HStack(spacing: 8) {
                 Button {
-                    Task { await state.toggleLoad(model) }
+                    Task { await state.switchProfile(model) }
                 } label: {
                     HStack(spacing: 4) {
                         if model.isBusy {
                             ProgressView().scaleEffect(0.5).frame(width: 12, height: 12)
                         } else {
-                            Image(systemName: model.isLoaded ? "eject.fill" : "play.fill")
+                            Image(systemName: model.isActive ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
                                 .font(.system(size: 9))
                         }
-                        Text(model.isLoaded ? "Unload" : "Load")
+                        Text(model.isActive ? "Active" : "Switch")
                             .font(.system(size: 11, weight: .medium))
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(model.isLoaded ? .orange : .accentColor)
+                .tint(model.isActive ? .green : .accentColor)
                 .controlSize(.small)
-                .disabled(!state.serverRunning || model.isBusy)
+                .disabled(!state.serverRunning || model.isBusy || model.isActive)
 
                 Button {
                     Task { await state.chatTest(model) }
@@ -100,17 +98,15 @@ struct ModelCard: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(!state.serverRunning || model.isBusy)
+                .disabled(!state.serverRunning || model.isBusy || !model.isActive)
             }
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(.quinary)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(model.isLoaded ? Color.green.opacity(0.4) : Color.clear, lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: 10)
+                    .stroke(model.isActive ? Color.green.opacity(0.4) : Color.clear, lineWidth: 1))
         )
     }
 

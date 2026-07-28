@@ -2,13 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
-    @State private var advancedModel: ModelInfo? = nil
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                optimalBanner
+                profileSwitcher
                 ForEach(state.models) { model in
-                    modelConfig(model)
+                    contextCard(model)
                 }
                 serverConfig
             }
@@ -16,75 +16,91 @@ struct SettingsView: View {
         }
     }
 
-    // ── Optimal preset banner ────────────────────────────────────────
-    private var optimalBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: state.allSettingsOptimal ? "checkmark.seal.fill" : "wand.and.stars")
-                .font(.system(size: 16))
-                .foregroundStyle(state.allSettingsOptimal ? .green : .accentColor)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(state.allSettingsOptimal ? "All models optimal" : "Optimal preset available")
-                    .font(.system(size: 12, weight: .semibold))
-                Text("llm engine · MTP off · f16 KV — benchmark-verified")
-                    .font(.system(size: 9)).foregroundStyle(.secondary)
+    // ── Profile switcher banner ──────────────────────────────────────
+    private var profileSwitcher: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "cpu").font(.system(size: 13)).foregroundStyle(.accentColor)
+                Text("Active Profile").font(.system(size: 12, weight: .semibold))
+                Spacer()
+                if state.serverRunning {
+                    let active = state.models.first(where: { $0.isActive })
+                    Text(active?.displayName ?? "—")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
-            Spacer()
-            Button("Apply") { Task { await state.applyOptimalToAll() } }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .disabled(!state.serverRunning || state.allSettingsOptimal)
+            HStack(spacing: 8) {
+                ForEach(state.models) { model in
+                    Button {
+                        Task { await state.switchProfile(model) }
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: model.isActive ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 14))
+                                .foregroundStyle(model.isActive ? .green : .secondary)
+                            Text(model.displayName)
+                                .font(.system(size: 10, weight: .medium))
+                            Text(model.quant)
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(model.isActive ? .green : .primary)
+                    .disabled(!state.serverRunning || model.isActive || model.isBusy)
+                }
+            }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
     }
 
-    // ── Per-model config ─────────────────────────────────────────────
-    private func modelConfig(_ model: ModelInfo) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(model.displayName).font(.system(size: 12, weight: .semibold))
-
-            Picker("Engine", selection: bind(model.id, \.modelTypeOverride)) {
-                Text("auto").tag("auto"); Text("llm").tag("llm"); Text("vlm").tag("vlm")
-            }
-            .pickerStyle(.segmented).controlSize(.small)
-
-            Toggle("MTP speculative decode", isOn: bind(model.id, \.mtpEnabled))
-                .font(.system(size: 11)).toggleStyle(.switch).controlSize(.mini)
-            Toggle("TurboQuant KV cache", isOn: bind(model.id, \.turboquantKV))
-                .font(.system(size: 11)).toggleStyle(.switch).controlSize(.mini)
-
+    // ── Context preset per profile ───────────────────────────────────
+    private func contextCard(_ model: ModelInfo) -> some View {
+        let presets = AppState.contextPresets[model.profileID] ?? []
+        let binding = Binding<Int>(
+            get: { state.profileSettings[model.profileID]?.contextPreset ?? model.contextTokens },
+            set: { state.profileSettings[model.profileID] = ProfileSettings(contextPreset: $0) }
+        )
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                if state.modelSettings[model.id] == .optimal {
-                    Label("optimal", systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 9)).foregroundStyle(.green)
-                }
+                Text(model.displayName).font(.system(size: 12, weight: .semibold))
                 Spacer()
-                Button {
-                    advancedModel = model
-                } label: {
-                    Label("Advanced", systemImage: "gearshape.2")
-                        .font(.system(size: 11))
+                if model.isActive {
+                    Text("ACTIVE").font(.system(size: 8, weight: .bold)).foregroundStyle(.green)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .controlSize(.small)
-                Button("Apply") { Task { await state.applySettings(for: model.id) } }
-                    .buttonStyle(.bordered).controlSize(.small)
-                    .disabled(!state.serverRunning)
             }
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
-        .sheet(item: $advancedModel) { m in
-            AdvancedSettingsView(
-                model: m,
-                fullSettings: Binding(
-                    get: { state.fullModelSettings[m.id] ?? .optimal },
-                    set: { state.fullModelSettings[m.id] = $0 }
-                )
-            )
-            .environmentObject(state)
-            .frame(width: 400, height: 620)
+            Text("Context window").font(.system(size: 10)).foregroundStyle(.secondary)
+            Picker("Context", selection: binding) {
+                ForEach(presets, id: \.tokens) { preset in
+                    Text(preset.label).tag(preset.tokens)
+                }
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            HStack(spacing: 4) {
+                Image(systemName: "info.circle").font(.system(size: 9)).foregroundStyle(.secondary)
+                if model.profileID == "qwen36-a3b-q8-q4mtp" {
+                    Text("128K = profile recommended · 512K uses YaRN (speculation off)")
+                } else {
+                    Text("All presets fully qualified · 256K = max native context")
+                }
+            }
+            .font(.system(size: 8)).foregroundStyle(.secondary)
+            Button("Apply & Restart") {
+                Task {
+                    let ctx = state.profileSettings[model.profileID]?.contextPreset ?? model.contextTokens
+                    state.statusMessage = "Restarting \(model.displayName) at \(ctx / 1024)K…"
+                    // Rewrite plist context and restart via tess-switch
+                    try? await APIClient.switchProfileWithContext(model.profileID, context: ctx)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!state.serverRunning || !model.isActive)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
@@ -93,62 +109,37 @@ struct SettingsView: View {
     // ── Server config ────────────────────────────────────────────────
     private var serverConfig: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SERVER").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
-
+            Text("TESS SERVER").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
             HStack {
-                Text("Host").font(.system(size: 11)).frame(width: 70, alignment: .leading)
+                Text("Host").font(.system(size: 11)).frame(width: 50, alignment: .leading)
                 TextField("127.0.0.1", text: $state.host).textFieldStyle(.roundedBorder).controlSize(.small)
-                Button {
-                    state.detectTailscaleIP()
-                } label: {
+                Button { state.detectTailscaleIP() } label: {
                     Image(systemName: "network").font(.system(size: 10))
                 }
                 .buttonStyle(.bordered).controlSize(.small)
-                .help("Detect this machine's Tailscale IP")
-            }
-            Text("127.0.0.1 = local only · Tailscale IP = reachable across your tailnet")
-                .font(.system(size: 8)).foregroundStyle(.secondary)
-
-            HStack {
-                Text("Port").font(.system(size: 11)).frame(width: 70, alignment: .leading)
-                TextField("9900", text: $state.port).textFieldStyle(.roundedBorder).controlSize(.small)
+                .help("Set to Tailscale IP for tailnet access")
             }
             HStack {
-                Text("Guard").font(.system(size: 11)).frame(width: 70, alignment: .leading)
-                Picker("", selection: $state.memoryGuard) {
-                    Text("safe").tag("safe"); Text("balanced").tag("balanced"); Text("aggressive").tag("aggressive")
-                }.pickerStyle(.segmented).controlSize(.small)
+                Text("Port").font(.system(size: 11)).frame(width: 50, alignment: .leading)
+                TextField("8020", text: $state.port).textFieldStyle(.roundedBorder).controlSize(.small)
+                Text("default: 8020").font(.system(size: 9)).foregroundStyle(.secondary)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Model dir").font(.system(size: 11))
-                Text(state.modelDir).font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            Text("Profile switches via ~/projects/omp-stack/gateway/scripts/tess-switch.sh")
+                .font(.system(size: 8, design: .monospaced)).foregroundStyle(.secondary)
+            Button {
+                state.serverRunning ? state.stopServer() : state.startServer()
+            } label: {
+                Label(state.serverRunning ? "Stop Tess" : "Start Tess",
+                      systemImage: state.serverRunning ? "stop.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(maxWidth: .infinity)
             }
-
-            HStack(spacing: 8) {
-                Button {
-                    state.serverRunning ? state.stopServer() : state.startServer()
-                } label: {
-                    Label(state.serverRunning ? "Stop Server" : "Start Server",
-                          systemImage: state.serverRunning ? "stop.fill" : "play.fill")
-                        .font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(state.serverRunning ? .red : .green)
-                .controlSize(.small)
-                .disabled(state.serverStarting)
-            }
+            .buttonStyle(.borderedProminent)
+            .tint(state.serverRunning ? .red : .green)
+            .controlSize(.small)
+            .disabled(state.serverStarting)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quinary))
-    }
-
-    private func bind(_ id: String, _ kp: WritableKeyPath<ModelSettings, String>) -> Binding<String> {
-        Binding(get: { state.modelSettings[id]?[keyPath: kp] ?? "auto" },
-                set: { var s = state.modelSettings[id] ?? .optimal; s[keyPath: kp] = $0; state.modelSettings[id] = s })
-    }
-    private func bind(_ id: String, _ kp: WritableKeyPath<ModelSettings, Bool>) -> Binding<Bool> {
-        Binding(get: { state.modelSettings[id]?[keyPath: kp] ?? false },
-                set: { var s = state.modelSettings[id] ?? .optimal; s[keyPath: kp] = $0; state.modelSettings[id] = s })
     }
 }

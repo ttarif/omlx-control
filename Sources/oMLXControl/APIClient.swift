@@ -18,129 +18,54 @@ enum APIError: Error, CustomStringConvertible {
     }
 }
 
-// MARK: - /admin/api/models
+// MARK: - /v1/models (tess-server OpenAI-compat)
 
-struct AdminModelsResponse: Decodable {
-    let models: [AdminModel]
+struct TessModelMeta: Decodable {
+    let n_ctx: Int?
+    let n_params: Int?
+    let size: Int?
+    let ftype: String?
 }
 
-struct AdminModel: Decodable {
+struct TessModel: Decodable {
     let id: String
-    let loaded: Bool
-    let isLoading: Bool
-    let estimatedSizeFormatted: String?
-    let actualSizeFormatted: String?
-    let modelType: String?
-    let engineType: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, loaded
-        case isLoading              = "is_loading"
-        case estimatedSizeFormatted = "estimated_size_formatted"
-        case actualSizeFormatted    = "actual_size_formatted"
-        case modelType              = "model_type"
-        case engineType             = "engine_type"
-    }
+    let meta: TessModelMeta?
 }
 
-// MARK: - /admin/api/stats
-
-struct AdminStats: Decodable {
-    var totalTokensServed: Int
-    var totalRequests: Int
-    var avgPrefillTPS: Double
-    var avgGenerationTPS: Double
-    var cacheEfficiency: Double
-    var uptimeSeconds: Double
-    var memoryUsedBytes: Int
-    var memoryMaxBytes: Int
-    var memoryCurrentFormatted: String
-    var memorySoftFormatted: String
-    var memoryHardFormatted: String
-    var pressureLevel: String
-    var activeRequests: Int
-    var waitingRequests: Int
-    var loadedModelIDs: [String]
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        totalTokensServed = (try? c.decode(Int.self,    forKey: .totalTokensServed)) ?? 0
-        totalRequests     = (try? c.decode(Int.self,    forKey: .totalRequests))     ?? 0
-        avgPrefillTPS     = (try? c.decode(Double.self, forKey: .avgPrefillTPS))     ?? 0
-        avgGenerationTPS  = (try? c.decode(Double.self, forKey: .avgGenerationTPS))  ?? 0
-        cacheEfficiency   = (try? c.decode(Double.self, forKey: .cacheEfficiency))   ?? 0
-        uptimeSeconds     = (try? c.decode(Double.self, forKey: .uptimeSeconds))     ?? 0
-
-        // active_models nesting
-        var used = 0, maxB = 0, active = 0, waiting = 0
-        var curFmt = "0 GB", softFmt = "—", hardFmt = "—", level = "unknown"
-        var ids: [String] = []
-        if let am = try? c.nestedContainer(keyedBy: ActiveModelsKeys.self, forKey: .activeModels) {
-            used    = (try? am.decode(Int.self, forKey: .modelMemoryUsed)) ?? 0
-            maxB    = (try? am.decode(Int.self, forKey: .modelMemoryMax)) ?? 0
-            active  = (try? am.decode(Int.self, forKey: .totalActiveRequests)) ?? 0
-            waiting = (try? am.decode(Int.self, forKey: .totalWaitingRequests)) ?? 0
-            if let list = try? am.decode([ActiveModelEntry].self, forKey: .models) {
-                ids = list.map { $0.id }
-            }
-            if let mp = try? am.nestedContainer(keyedBy: PressureKeys.self, forKey: .memoryPressure) {
-                curFmt  = (try? mp.decode(String.self, forKey: .currentFormatted)) ?? curFmt
-                softFmt = (try? mp.decode(String.self, forKey: .softFormatted)) ?? softFmt
-                hardFmt = (try? mp.decode(String.self, forKey: .hardFormatted)) ?? hardFmt
-                level   = (try? mp.decode(String.self, forKey: .pressureLevel)) ?? level
-            }
-        }
-        memoryUsedBytes = used
-        memoryMaxBytes  = maxB
-        activeRequests  = active
-        waitingRequests = waiting
-        memoryCurrentFormatted = curFmt
-        memorySoftFormatted    = softFmt
-        memoryHardFormatted    = hardFmt
-        pressureLevel          = level
-        loadedModelIDs         = ids
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case totalTokensServed = "total_tokens_served"
-        case totalRequests     = "total_requests"
-        case avgPrefillTPS     = "avg_prefill_tps"
-        case avgGenerationTPS  = "avg_generation_tps"
-        case cacheEfficiency   = "cache_efficiency"
-        case uptimeSeconds     = "uptime_seconds"
-        case activeModels      = "active_models"
-    }
-    enum ActiveModelsKeys: String, CodingKey {
-        case models
-        case modelMemoryUsed      = "model_memory_used"
-        case modelMemoryMax       = "model_memory_max"
-        case memoryPressure       = "memory_pressure"
-        case totalActiveRequests  = "total_active_requests"
-        case totalWaitingRequests = "total_waiting_requests"
-    }
-    enum PressureKeys: String, CodingKey {
-        case currentFormatted = "current_formatted"
-        case softFormatted    = "soft_formatted"
-        case hardFormatted    = "hard_formatted"
-        case pressureLevel    = "pressure_level"
-    }
-    struct ActiveModelEntry: Decodable { let id: String }
+struct TessModelsResponse: Decodable {
+    let data: [TessModel]
 }
 
-// MARK: - Settings apply response
+// MARK: - Stats (parsed from /metrics Prometheus text)
 
-struct SettingsApplyResponse: Decodable {
-    let success: Bool
-    let modelType: String?
-    let requiresReload: Bool?
-    enum CodingKeys: String, CodingKey {
-        case success
-        case modelType      = "model_type"
-        case requiresReload = "requires_reload"
-    }
+struct TessStats {
+    var prefillTPS: Double = 0
+    var decodeTPS: Double = 0
+    var tokensPrompt: Int = 0
+    var tokensPredicted: Int = 0
+    var requestsProcessing: Int = 0
+    var requestsDeferred: Int = 0
+    var loadedModelIDs: [String] = []
+
+    // Derived for UI compatibility
+    var totalTokensServed: Int { tokensPrompt + tokensPredicted }
+    var totalRequests: Int { tokensPrompt > 0 ? 1 : 0 }   // tess doesn't report req count directly
+    var avgPrefillTPS: Double { prefillTPS }
+    var avgGenerationTPS: Double { decodeTPS }
+    var cacheEfficiency: Double { 0 }
+    var activeRequests: Int { requestsProcessing }
+    var waitingRequests: Int { requestsDeferred }
+
+    // Memory — tess exposes no memory stats in /metrics; derive from model size
+    var memoryUsedBytes: Int = 0
+    var memoryMaxBytes: Int = 0
+    var pressureLevel: String = "ok"
+    var memoryCurrentFormatted: String = "—"
+    var memorySoftFormatted: String = "—"
+    var memoryHardFormatted: String = "—"
 }
 
-// MARK: - Chat test result
+// MARK: - ChatTestResult
 
 struct ChatTestResult {
     let ok: Bool
@@ -160,42 +85,95 @@ enum APIClient {
         return URLSession(configuration: cfg)
     }()
 
-    // ── Detailed model list ────────────────────────────────────────────
-    static func fetchModels(baseURL: String) async throws -> [AdminModel] {
-        let data = try await get("\(baseURL)/admin/api/models")
-        return try decode(AdminModelsResponse.self, data).models
+    // ── Model list ────────────────────────────────────────────────────
+    static func fetchModels(baseURL: String) async throws -> [TessModel] {
+        let data = try await get("\(baseURL)/v1/models")
+        return try decode(TessModelsResponse.self, data).data
     }
 
-    // ── Server stats ───────────────────────────────────────────────────
-    static func fetchStats(baseURL: String) async throws -> AdminStats {
-        let data = try await get("\(baseURL)/admin/api/stats")
-        return try decode(AdminStats.self, data)
+    // ── Stats from Prometheus /metrics ────────────────────────────────
+    static func fetchStats(baseURL: String) async throws -> TessStats {
+        let data = try await get("\(baseURL)/metrics")
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw APIError.decodingError(NSError(domain: "utf8", code: 0))
+        }
+        return parseMetrics(text)
     }
 
-    // ── Load / unload (POST, verified) ─────────────────────────────────
-    static func loadModel(id: String, baseURL: String) async throws {
-        _ = try await post("\(baseURL)/admin/api/models/\(id)/load", body: [:])
-    }
-    static func unloadModel(id: String, baseURL: String) async throws {
-        _ = try await post("\(baseURL)/admin/api/models/\(id)/unload", body: [:])
-    }
-
-    // ── Apply per-model settings (PUT, verified fields) ────────────────
-    @discardableResult
-    static func applyModelSettings(
-        id: String, baseURL: String,
-        modelTypeOverride: String, mtpEnabled: Bool, turboquantKVEnabled: Bool
-    ) async throws -> SettingsApplyResponse {
-        let payload: [String: Any] = [
-            "model_type_override": modelTypeOverride,
-            "mtp_enabled": mtpEnabled,
-            "turboquant_kv_enabled": turboquantKVEnabled
-        ]
-        let data = try await put("\(baseURL)/admin/api/models/\(id)/settings", body: payload)
-        return try decode(SettingsApplyResponse.self, data)
+    private static func parseMetrics(_ text: String) -> TessStats {
+        var s = TessStats()
+        for line in text.split(separator: "\n") {
+            let l = String(line)
+            guard !l.hasPrefix("#") else { continue }
+            let parts = l.split(separator: " ", maxSplits: 1)
+            guard parts.count == 2, let val = Double(parts[1].trimmingCharacters(in: .whitespaces)) else { continue }
+            let key = String(parts[0])
+            switch key {
+            case "llamacpp:prompt_tokens_seconds":       s.prefillTPS = val
+            case "llamacpp:predicted_tokens_seconds":    s.decodeTPS = val
+            case "llamacpp:prompt_tokens_total":         s.tokensPrompt = Int(val)
+            case "llamacpp:tokens_predicted_total":      s.tokensPredicted = Int(val)
+            case "llamacpp:requests_processing":         s.requestsProcessing = Int(val)
+            case "llamacpp:requests_deferred":           s.requestsDeferred = Int(val)
+            default: break
+            }
+        }
+        return s
     }
 
-    // ── Chat test — measures real tok/s ────────────────────────────────
+    // ── Profile switch (via tess-switch.sh shell script) ──────────────
+    /// Switches the running Tess profile by executing tess-switch.sh and
+    /// restarting com.omp.tess via launchctl. Non-blocking; completion is
+    /// polled via the existing refresh loop.
+    static func switchProfile(_ profileID: String) async throws {
+        let script = "\(FileManager.default.homeDirectoryForCurrentUser.path)/projects/omp-stack/gateway/scripts/tess-switch.sh"
+        guard FileManager.default.fileExists(atPath: script) else {
+            throw APIError.notFound
+        }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        p.arguments = [script, profileID]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError  = FileHandle.nullDevice
+        try p.run()
+        // Don't wait — the script restarts the server; polling will detect the new model
+    }
+
+    /// Switch profile AND override the context window. Updates the launchd plist
+    /// directly then calls tess-switch so the new context takes effect on restart.
+    static func switchProfileWithContext(_ profileID: String, context: Int) async throws {
+        let script = "\(FileManager.default.homeDirectoryForCurrentUser.path)/projects/omp-stack/gateway/scripts/tess-switch.sh"
+        guard FileManager.default.fileExists(atPath: script) else { throw APIError.notFound }
+        // Patch the context arg in the plist via PlistBuddy before calling the switch
+        let plist = "\(FileManager.default.homeDirectoryForCurrentUser.path)/Library/LaunchAgents/com.omp.tess.plist"
+        let pb = Process()
+        pb.executableURL = URL(fileURLWithPath: "/usr/libexec/PlistBuddy")
+        pb.arguments = ["-c", "Set :ProgramArguments:7 \(context)", plist]
+        pb.standardOutput = FileHandle.nullDevice
+        pb.standardError  = FileHandle.nullDevice
+        try? pb.run(); pb.waitUntilExit()
+        try await switchProfile(profileID)
+    }
+
+    // ── Server control via launchctl ──────────────────────────────────
+    static func startServer() {
+        launchctl("kickstart", "-k", "gui/\(getuid())/com.omp.tess")
+    }
+
+    static func stopServer() {
+        launchctl("kill", "SIGTERM", "gui/\(getuid())/com.omp.tess")
+    }
+
+    private static func launchctl(_ args: String...) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        p.arguments = args
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError  = FileHandle.nullDevice
+        try? p.run()
+    }
+
+    // ── Chat test ─────────────────────────────────────────────────────
     static func chatTest(id: String, baseURL: String) async throws -> ChatTestResult {
         guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
             throw APIError.connectionRefused
@@ -215,7 +193,6 @@ enum APIClient {
         let start = Date()
         let data = try await perform(req)
         let latency = Date().timeIntervalSince(start)
-
         struct ChatResp: Decodable {
             struct Choice: Decodable { struct Msg: Decodable { let content: String? }; let message: Msg }
             struct Usage: Decodable { let completion_tokens: Int? }
@@ -234,21 +211,6 @@ enum APIClient {
     private static func get(_ s: String) async throws -> Data {
         guard let url = URL(string: s) else { throw APIError.connectionRefused }
         var r = URLRequest(url: url); r.timeoutInterval = 5
-        return try await perform(r)
-    }
-    private static func post(_ s: String, body: [String: Any]) async throws -> Data {
-        try await send(s, method: "POST", body: body, timeout: 120)
-    }
-    private static func put(_ s: String, body: [String: Any]) async throws -> Data {
-        try await send(s, method: "PUT", body: body, timeout: 15)
-    }
-    private static func send(_ s: String, method: String, body: [String: Any], timeout: TimeInterval) async throws -> Data {
-        guard let url = URL(string: s) else { throw APIError.connectionRefused }
-        var r = URLRequest(url: url)
-        r.httpMethod = method
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        r.timeoutInterval = timeout
         return try await perform(r)
     }
     private static func perform(_ req: URLRequest) async throws -> Data {

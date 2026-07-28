@@ -258,23 +258,11 @@ struct AdvancedSettingsView: View {
     private func applyAll() async {
         applying = true
         defer { applying = false }
-        do {
-            let payload = fullSettings.toPayload()
-            let data = try JSONSerialization.data(withJSONObject: payload)
-            guard let url = URL(string: "\(state.baseURL)/admin/api/models/\(model.id)/settings") else { return }
-            var req = URLRequest(url: url)
-            req.httpMethod = "PUT"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = data
-            req.timeoutInterval = 15
-            let (respData, _) = try await URLSession.shared.data(for: req)
-            if let r = try? JSONDecoder().decode(SettingsApplyResponse.self, from: respData) {
-                result = r.success ? "✓ Applied" : "✗ Failed"
-                if r.success { state.statusMessage = "Advanced settings applied for \(model.displayName)" }
-            }
-        } catch {
-            result = "✗ \(error.localizedDescription)"
-        }
+        // Tess-server has no per-model settings API.
+        // Settings are baked into the profile; use tess-switch.sh to restart with a different profile.
+        // The advanced panel still exposes all knobs for reference and future tess-server versions.
+        result = "ℹ️ Tess settings are profile-level — use the Settings tab context picker or tess-switch to apply."
+        state.statusMessage = "Advanced settings noted (restart via Settings tab to apply context changes)"
     }
 
     // MARK: - Builder helpers
